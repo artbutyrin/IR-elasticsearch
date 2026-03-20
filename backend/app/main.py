@@ -1,19 +1,9 @@
-import os
-
-from elasticsearch import Elasticsearch
 from fastapi import FastAPI
+
+from .routers.health import router as health_router
+from .routers.movies import router as movies_router
 
 app = FastAPI(title="IR Elasticsearch Demo API")
 
-es_url = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
-es_client = Elasticsearch(es_url)
-
-
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
-
-
-@app.get("/es-health")
-def elasticsearch_health():
-    return {"elasticsearch_reachable": es_client.ping(), "url": es_url}
+app.include_router(health_router)
+app.include_router(movies_router)
