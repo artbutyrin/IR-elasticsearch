@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PaginationControls from "./PaginationControls";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
 
@@ -110,22 +111,48 @@ function MovieListCard({ movie }) {
   );
 }
 
-export default function MoviesView({ view, results }) {
+/**
+ * Pagination is rendered inside #cards-area (directly under the last row of cards)
+ * so it always scrolls with results and is not lost to flex/layout outside the list.
+ */
+export default function MoviesView({ view, results, pagination, resultPage = 1 }) {
   if (!results.length) {
     return null;
   }
+
+  const totalNum = pagination ? Number(pagination.total) || 0 : 0;
+  const pageNum = pagination ? Number(pagination.page) || 1 : 1;
+  // Include page in React keys so list items are not reused across pages (avoids stale card content).
+  const rowKey = (movie) => `p${resultPage}-${cardKey(movie)}`;
+  const pageSize = pagination ? Number(pagination.pageSize) || 24 : 24;
+  const totalPagesNum = pagination ? Number(pagination.totalPages) || 0 : 0;
+  const showPager = Boolean(pagination && totalPagesNum > 1 && pagination.onPageChange);
 
   return (
     <div id="cards-area">
       <div className={view === "grid" ? "cards-grid" : "cards-list"}>
         {results.map((movie) =>
           view === "grid" ? (
-            <MovieGridCard key={cardKey(movie)} movie={movie} />
+            <MovieGridCard key={rowKey(movie)} movie={movie} />
           ) : (
-            <MovieListCard key={cardKey(movie)} movie={movie} />
+            <MovieListCard key={rowKey(movie)} movie={movie} />
           )
         )}
       </div>
+      {showPager && (
+        <footer className="pagination-footer pagination-footer--under-cards" aria-label="Next page">
+          <div className="pagination-footer-title">More results</div>
+          <PaginationControls
+            page={pageNum}
+            totalPages={totalPagesNum}
+            onPageChange={pagination.onPageChange}
+          />
+          <p className="pagination-footer-hint">
+            Showing {totalNum ? `${(pageNum - 1) * pageSize + 1}–${Math.min(pageNum * pageSize, totalNum)}` : "—"} of{" "}
+            {totalNum.toLocaleString()} · use ‹ › or page numbers
+          </p>
+        </footer>
+      )}
     </div>
   );
 }

@@ -30,16 +30,21 @@ export async function importTmdbCsv(file) {
   return res.json();
 }
 
-export async function searchMovies({ q, genre, yearFrom, yearTo, page = 1, pageSize = 24 }) {
+export async function searchMovies({ q, genre, yearFrom, yearTo, page = 1, pageSize = 24, signal }) {
   const params = new URLSearchParams();
   if (q?.trim()) params.set("q", q.trim());
   if (genre) params.set("genre", genre);
   if (yearFrom) params.set("year_from", yearFrom);
   if (yearTo) params.set("year_to", yearTo);
-  params.set("page", String(page));
-  params.set("page_size", String(pageSize));
+  const pageNum = Number(page);
+  const sizeNum = Number(pageSize);
+  params.set("page", String(Number.isFinite(pageNum) && pageNum >= 1 ? pageNum : 1));
+  params.set("page_size", String(Number.isFinite(sizeNum) && sizeNum >= 1 ? sizeNum : 24));
 
-  const res = await fetch(`${API_BASE}/search?${params.toString()}`);
+  const res = await fetch(`${API_BASE}/search?${params.toString()}`, {
+    cache: "no-store",
+    signal,
+  });
   if (!res.ok) {
     throw new Error("Search request failed");
   }

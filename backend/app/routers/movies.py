@@ -1,7 +1,7 @@
 import os
 import tempfile
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
 
 from ..schemas.movies import SearchResponse
 from ..services.movies_service import (
@@ -47,6 +47,7 @@ async def import_tmdb_csv(file: UploadFile = File(...)) -> dict:
 
 @router.get("/search", response_model=SearchResponse)
 def search(
+    response: Response,
     q: str = Query(default=""),
     genre: str | None = Query(default=None),
     year_from: int | None = Query(default=None),
@@ -54,6 +55,8 @@ def search(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=24, ge=1, le=50),
 ) -> dict:
+    # Avoid stale paginated responses from proxies or aggressive browser caches.
+    response.headers["Cache-Control"] = "no-store"
     return search_movies(
         query_text=q,
         genre=genre,

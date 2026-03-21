@@ -420,6 +420,87 @@ select {
   white-space: nowrap;
 }
 
+.page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-num-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: var(--r);
+  border: 1.5px solid var(--rule);
+  background: white;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink2);
+  cursor: pointer;
+}
+
+.page-num-btn:hover:not(.on) {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.page-num-btn.on {
+  background: var(--ink);
+  color: white;
+  border-color: var(--ink);
+}
+
+.page-ellipsis {
+  font-size: 12px;
+  color: var(--ink3);
+  padding: 0 2px;
+}
+
+.results-page-hint {
+  font-weight: 400;
+  color: var(--ink3);
+}
+
+/* Pagination under movie cards (inside #cards-area) */
+.pagination-footer {
+  margin-top: 28px;
+  padding: 20px 16px 28px;
+  border-top: 2px solid var(--ink);
+  background: var(--bone);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+}
+
+.pagination-footer--under-cards {
+  border-radius: 0 0 var(--r) var(--r);
+}
+
+.pagination-footer-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink2);
+}
+
+.pagination-footer .pagination {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.pagination-footer-hint {
+  font-size: 12px;
+  color: var(--ink3);
+  text-align: center;
+  margin: 0;
+}
+
 .results-count {
   font-family: "Playfair Display", serif;
   font-size: 22px;

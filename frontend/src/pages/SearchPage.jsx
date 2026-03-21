@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { checkBackendHealth, importTmdbCsv, searchMovies, seedMovies } from "../api/moviesApi";
 import MoviesView from "../components/MoviesView";
 import ResultsBar from "../components/ResultsBar";
@@ -27,8 +27,18 @@ export default function SearchPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importing, setImporting] = useState(false);
 
+  const searchAbortRef = useRef(null);
+  const searchSeqRef = useRef(0);
+
   const fetchResults = async (nextPage, qOverride) => {
     const q = qOverride !== undefined && qOverride !== null ? qOverride : query;
+    const pageToFetch = Number(nextPage);
+    const safePage = Number.isFinite(pageToFetch) && pageToFetch >= 1 ? pageToFetch : 1;
+
+    searchAbortRef.current?.abort();
+    const ac = new AbortController();
+    searchAbortRef.current = ac;
+    const seq = ++searchSeqRef.current;
 
     setLoading(true);
     setErrorMessage("");
@@ -41,17 +51,25 @@ export default function SearchPage() {
         genre,
         yearFrom,
         yearTo,
-        page: nextPage,
+        page: safePage,
         pageSize: PAGE_SIZE,
+        signal: ac.signal,
       });
-      setResults(data.results || []);
-      setTotal(data.total ?? 0);
-      setPage(data.page ?? nextPage);
-      setTotalPages(data.total_pages ?? 0);
-    } catch {
+      if (seq !== searchSeqRef.current) return;
+
+      const list = Array.isArray(data.results) ? data.results : [];
+      setResults(list);
+      setTotal(Number(data.total) || 0);
+      setPage(Number(data.page) || safePage);
+      setTotalPages(Number(data.total_pages) || 0);
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+      if (seq !== searchSeqRef.current) return;
       setErrorMessage("Cannot fetch search results. Is backend running?");
     } finally {
-      setLoading(false);
+      if (seq === searchSeqRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -63,8 +81,12 @@ export default function SearchPage() {
   };
 
   const goToPage = (nextPage) => {
-    if (nextPage < 1 || (totalPages > 0 && nextPage > totalPages)) return;
-    fetchResults(nextPage);
+    const n = Number(nextPage);
+    if (!Number.isFinite(n)) return;
+    const maxPages =
+      totalPages > 0 ? totalPages : total > 0 ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : 1;
+    if (n < 1 || n > maxPages) return;
+    fetchResults(n);
   };
 
   const seedData = async () => {
@@ -121,6 +143,11 @@ export default function SearchPage() {
     };
   }, []);
 
+  const totalNum = Number(total) || 0;
+  const totalPagesNum = Number(totalPages) || 0;
+  const effectiveTotalPages =
+    totalPagesNum > 0 ? totalPagesNum : totalNum > 0 ? Math.max(1, Math.ceil(totalNum / PAGE_SIZE)) : 0;
+
   return (
     <>
       <SettingsPanel
@@ -155,12 +182,27 @@ export default function SearchPage() {
             onViewChange={setView}
             page={page}
             pageSize={PAGE_SIZE}
-            totalPages={totalPages}
+            totalPages={effectiveTotalPages}
             onPageChange={goToPage}
           />
           <States loading={loading} message={errorMessage} total={total} hasSearch={hasSearch} />
           {successMessage && <div className="inline-success">{successMessage}</div>}
-          <MoviesView view={view} results={results} />
+          <MoviesView
+            view={view}
+            results={results}
+            resultPage={page}
+            pagination={
+              hasSearch && effectiveTotalPages > 1
+                ? {
+                    page,
+                    totalPages: effectiveTotalPages,
+                    pageSize: PAGE_SIZE,
+                    total: totalNum,
+                    onPageChange: goToPage,
+                  }
+                : null
+            }
+          />
         </main>
       </div>
     </>

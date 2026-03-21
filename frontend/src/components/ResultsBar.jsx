@@ -1,3 +1,5 @@
+import PaginationControls from "./PaginationControls";
+
 export default function ResultsBar({
   total,
   query,
@@ -11,9 +13,6 @@ export default function ResultsBar({
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
 
-  const canPrev = page > 1;
-  const canNext = page < totalPages;
-
   return (
     <div id="results-bar">
       <div className="results-info">
@@ -22,24 +21,16 @@ export default function ResultsBar({
         {query && <div className="results-query-badge">"{query}"</div>}
         {total > 0 && (
           <div className="results-range">
-            Showing {start}–{end}
+            Results <strong>{start}</strong>–<strong>{end}</strong> of {total.toLocaleString()}
+            {totalPages > 1 && <span className="results-page-hint"> · page {page} shows #{start}–#{end}</span>}
           </div>
         )}
       </div>
 
       <div className="results-bar-right">
-        {totalPages > 1 && (
-          <div className="pagination">
-            <button type="button" className="page-btn" disabled={!canPrev} onClick={() => onPageChange(page - 1)}>
-              ‹
-            </button>
-            <span className="page-info">
-              Page {page} / {totalPages}
-            </span>
-            <button type="button" className="page-btn" disabled={!canNext} onClick={() => onPageChange(page + 1)}>
-              ›
-            </button>
-          </div>
+        <PaginationControls page={page} totalPages={totalPages} onPageChange={onPageChange} />
+        {totalPages === 1 && total > 0 && (
+          <span className="page-info">Single page (all {total.toLocaleString()} results)</span>
         )}
         <div className="view-toggle">
           <button className={`view-btn ${view === "grid" ? "on" : ""}`} onClick={() => onViewChange("grid")}>
