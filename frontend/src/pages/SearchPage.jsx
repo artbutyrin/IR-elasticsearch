@@ -26,14 +26,16 @@ export default function SearchPage() {
   const [esOk, setEsOk] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [fuzzyEnabled, setFuzzyEnabled] = useState(true);
 
   const searchAbortRef = useRef(null);
   const searchSeqRef = useRef(0);
 
-  const fetchResults = async (nextPage, qOverride) => {
+  const fetchResults = async (nextPage, qOverride, opts = {}) => {
     const q = qOverride !== undefined && qOverride !== null ? qOverride : query;
     const pageToFetch = Number(nextPage);
     const safePage = Number.isFinite(pageToFetch) && pageToFetch >= 1 ? pageToFetch : 1;
+    const useFuzzy = opts.fuzzy !== undefined ? opts.fuzzy : fuzzyEnabled;
 
     searchAbortRef.current?.abort();
     const ac = new AbortController();
@@ -53,6 +55,7 @@ export default function SearchPage() {
         yearTo,
         page: safePage,
         pageSize: PAGE_SIZE,
+        fuzzy: useFuzzy,
         signal: ac.signal,
       });
       if (seq !== searchSeqRef.current) return;
@@ -77,7 +80,7 @@ export default function SearchPage() {
     const q = overrideQuery !== undefined ? overrideQuery : query;
     if (overrideQuery !== undefined) setQuery(overrideQuery);
     setPage(1);
-    fetchResults(1, q);
+    fetchResults(1, q, { fuzzy: fuzzyEnabled });
   };
 
   const goToPage = (nextPage) => {
@@ -86,7 +89,7 @@ export default function SearchPage() {
     const maxPages =
       totalPages > 0 ? totalPages : total > 0 ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : 1;
     if (n < 1 || n > maxPages) return;
-    fetchResults(n);
+    fetchResults(n, undefined, { fuzzy: fuzzyEnabled });
   };
 
   const seedData = async () => {
@@ -123,6 +126,11 @@ export default function SearchPage() {
     setGenre("");
     setYearFrom("");
     setYearTo("");
+  };
+
+  const handleFuzzyToggle = (checked) => {
+    setFuzzyEnabled(checked);
+    if (hasSearch) fetchResults(1, undefined, { fuzzy: checked });
   };
 
   useEffect(() => {
@@ -169,9 +177,11 @@ export default function SearchPage() {
           genre={genre}
           yearFrom={yearFrom}
           yearTo={yearTo}
+          fuzzyEnabled={fuzzyEnabled}
           onGenreChange={setGenre}
           onYearFromChange={setYearFrom}
           onYearToChange={setYearTo}
+          onFuzzyChange={handleFuzzyToggle}
           onQuickQuery={(q) => runSearch(q)}
         />
         <main id="main">

@@ -16,6 +16,9 @@ export default function Topbar({ query, onQueryChange, onSearch }) {
         <Link className={location.pathname === "/how-elastic-works" ? "nav-link on" : "nav-link"} to="/how-elastic-works">
           How ES works
         </Link>
+        <Link className={location.pathname === "/query-compare" ? "nav-link on" : "nav-link"} to="/query-compare">
+          Query compare
+        </Link>
       </nav>
 
       <div className="topbar-search">

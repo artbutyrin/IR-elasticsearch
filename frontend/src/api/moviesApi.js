@@ -30,7 +30,16 @@ export async function importTmdbCsv(file) {
   return res.json();
 }
 
-export async function searchMovies({ q, genre, yearFrom, yearTo, page = 1, pageSize = 24, signal }) {
+export async function searchMovies({
+  q,
+  genre,
+  yearFrom,
+  yearTo,
+  page = 1,
+  pageSize = 24,
+  fuzzy = true,
+  signal,
+}) {
   const params = new URLSearchParams();
   if (q?.trim()) params.set("q", q.trim());
   if (genre) params.set("genre", genre);
@@ -40,6 +49,7 @@ export async function searchMovies({ q, genre, yearFrom, yearTo, page = 1, pageS
   const sizeNum = Number(pageSize);
   params.set("page", String(Number.isFinite(pageNum) && pageNum >= 1 ? pageNum : 1));
   params.set("page_size", String(Number.isFinite(sizeNum) && sizeNum >= 1 ? sizeNum : 24));
+  params.set("fuzzy", fuzzy ? "true" : "false");
 
   const res = await fetch(`${API_BASE}/search?${params.toString()}`, {
     cache: "no-store",
@@ -47,6 +57,33 @@ export async function searchMovies({ q, genre, yearFrom, yearTo, page = 1, pageS
   });
   if (!res.ok) {
     throw new Error("Search request failed");
+  }
+  return res.json();
+}
+
+export async function compareQueries({
+  q,
+  genre,
+  yearFrom,
+  yearTo,
+  topN = 8,
+  fuzzy = true,
+  signal,
+}) {
+  const params = new URLSearchParams();
+  if (q?.trim()) params.set("q", q.trim());
+  if (genre) params.set("genre", genre);
+  if (yearFrom) params.set("year_from", yearFrom);
+  if (yearTo) params.set("year_to", yearTo);
+  params.set("top_n", String(topN));
+  params.set("fuzzy", fuzzy ? "true" : "false");
+
+  const res = await fetch(`${API_BASE}/search/compare?${params.toString()}`, {
+    cache: "no-store",
+    signal,
+  });
+  if (!res.ok) {
+    throw new Error("Compare request failed");
   }
   return res.json();
 }

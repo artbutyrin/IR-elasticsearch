@@ -4,9 +4,11 @@ export default function Sidebar({
   genre,
   yearFrom,
   yearTo,
+  fuzzyEnabled,
   onGenreChange,
   onYearFromChange,
   onYearToChange,
+  onFuzzyChange,
   onQuickQuery,
 }) {
   return (
@@ -53,6 +55,20 @@ export default function Sidebar({
                 placeholder="To"
               />
             </div>
+          </div>
+
+          <div className="filter-row filter-toggle-row">
+            <label className="filter-toggle">
+              <input
+                type="checkbox"
+                checked={fuzzyEnabled}
+                onChange={(e) => onFuzzyChange(e.target.checked)}
+              />
+              <span>
+                <strong>Fuzzy</strong> <span className="filter-toggle-hint">(AUTO vs off)</span>
+              </span>
+            </label>
+            <p className="filter-microcopy">Typo-tolerant multi_match. Turn off to see strict token matching.</p>
           </div>
         </div>
       </div>
