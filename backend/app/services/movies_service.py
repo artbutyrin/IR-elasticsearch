@@ -30,6 +30,18 @@ def _safe_int(value: str | None, default: int | None = None) -> int | None:
         return default
 
 
+def _parse_tmdb_bool(value: object) -> bool | None:
+    """Parse TMDB CSV boolean (True/False, 1/0, etc.)."""
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if s in ("true", "t", "1", "yes"):
+        return True
+    if s in ("false", "f", "0", "no", ""):
+        return False
+    return None
+
+
 def _safe_float(value: str | None, default: float | None = None) -> float | None:
     if value is None or value == "":
         return default
@@ -89,7 +101,7 @@ def tmdb_row_to_doc(row: dict) -> dict | None:
 def import_tmdb_csv_stream(file_obj: BinaryIO) -> dict:
     """
     Stream-read a TMDB CSV and bulk-index documents (does not load full file into RAM).
-    Expects columns: id, title, vote_average, release_date, overview, genres, keywords, etc.
+    Expects columns: id, title, vote_average, release_date, overview, genres, keywords, adult (optional), etc.
     """
     _recreate_index()
 
@@ -180,6 +192,7 @@ def seed_movies_index() -> dict:
                     "rating": movie.get("rating"),
                     "genre": genre,
                     "keywords": "",
+                    "adult": False,
                 },
             }
         )
@@ -190,38 +203,22 @@ def seed_movies_index() -> dict:
     return {"indexed_documents": success, "index": MOVIES_INDEX}
 
 
-def search_movies(
-    query_text: str = "",
-    genre: str | None = None,
-    year_from: int | None = None,
-    year_to: int | None = None,
-    page: int = 1,
-    page_size: int = DEFAULT_PAGE_SIZE,
-) -> dict:
-    must: list = []
+MULTI_MATCH_FIELDS = [
+    "title^3",
+    "original_title^2",
+    "overview",
+    "keywords^1.5",
+    "genres",
+    "description^2",
+]
+
+
+def _genre_year_filters(
+    genre: str | None,
+    year_from: int | None,
+    year_to: int | None,
+) -> list:
     filters: list = []
-
-    if query_text:
-        must.append(
-            {
-                "multi_match": {
-                    "query": query_text,
-                    "fields": [
-                        "title^3",
-                        "original_title^2",
-                        "overview",
-                        "keywords^1.5",
-                        "genres",
-                        "description^2",
-                    ],
-                    "fuzziness": "AUTO",
-                    "type": "best_fields",
-                }
-            }
-        )
-    else:
-        must.append({"match_all": {}})
-
     if genre:
         filters.append(
             {
@@ -235,7 +232,6 @@ def search_movies(
                 }
             }
         )
-
     if year_from is not None or year_to is not None:
         range_query: dict = {}
         if year_from is not None:
@@ -243,6 +239,103 @@ def search_movies(
         if year_to is not None:
             range_query["lte"] = year_to
         filters.append({"range": {"year": range_query}})
+    return filters
+
+
+def _bool_query(
+    must: list,
+    genre: str | None,
+    year_from: int | None,
+    year_to: int | None,
+    exclude_adult: bool,
+) -> dict:
+    filters = _genre_year_filters(genre, year_from, year_to)
+    # Keep adult moderation in filter context (independent of scoring / fuzzy multi_match).
+    if exclude_adult:
+        filters.append({"bool": {"must_not": [{"term": {"adult": True}}]}})
+    return {"bool": {"must": must, "filter": filters}}
+
+
+def _multi_match_must_clause(query_text: str, use_fuzzy: bool) -> list:
+    if not query_text:
+        return [{"match_all": {}}]
+    mm: dict = {
+        "query": query_text,
+        "fields": MULTI_MATCH_FIELDS,
+        "type": "best_fields",
+    }
+    if use_fuzzy:
+        mm["fuzziness"] = "AUTO"
+    else:
+        mm["fuzziness"] = 0
+    return [{"multi_match": mm}]
+
+
+def _match_phrase_must_clause(query_text: str) -> list:
+    if not query_text:
+        return [{"match_all": {}}]
+    return [{"match_phrase": {"title": query_text}}]
+
+
+def _normalize_hit(hit: dict) -> dict:
+    item = hit["_source"]
+    item["_score"] = hit["_score"]
+    item["highlight"] = hit.get("highlight", {})
+    if "overview" in item and not item.get("description"):
+        item["description"] = item["overview"]
+    if item.get("vote_average") is not None and item.get("rating") is None:
+        item["rating"] = item["vote_average"]
+    if item.get("genres") and not item.get("genre"):
+        item["genre"] = str(item["genres"]).split(",")[0].strip()
+    return item
+
+
+HIGHLIGHT_CONFIG = {
+    "fields": {
+        "title": {},
+        "original_title": {},
+        "overview": {},
+        "description": {},
+    },
+    "pre_tags": ["<mark>"],
+    "post_tags": ["</mark>"],
+}
+
+
+def _execute_search(
+    root_query: dict,
+    from_offset: int,
+    page_size: int,
+    *,
+    with_highlight: bool = True,
+) -> tuple[list, int]:
+    kw: dict = {
+        "index": MOVIES_INDEX,
+        "query": root_query,
+        "from_": from_offset,
+        "size": page_size,
+    }
+    if with_highlight:
+        kw["highlight"] = HIGHLIGHT_CONFIG
+    response = es_client.search(**kw)
+    results = [_normalize_hit(h) for h in response["hits"]["hits"]]
+    total_val = response["hits"]["total"]["value"]
+    return results, total_val
+
+
+def search_movies(
+    query_text: str = "",
+    genre: str | None = None,
+    year_from: int | None = None,
+    year_to: int | None = None,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    *,
+    fuzzy: bool = True,
+    exclude_adult: bool = False,
+) -> dict:
+    must = _multi_match_must_clause(query_text, use_fuzzy=fuzzy)
+    root = _bool_query(must, genre, year_from, year_to, exclude_adult)
 
     page = max(1, page)
     page_size = max(1, min(page_size, MAX_PAGE_SIZE))
@@ -250,39 +343,7 @@ def search_movies(
     if from_offset + page_size > MAX_RESULT_WINDOW:
         from_offset = max(0, MAX_RESULT_WINDOW - page_size)
 
-    response = es_client.search(
-        index=MOVIES_INDEX,
-        query={"bool": {"must": must, "filter": filters}},
-        highlight={
-            "fields": {
-                "title": {},
-                "original_title": {},
-                "overview": {},
-                "description": {},
-            },
-            "pre_tags": ["<mark>"],
-            "post_tags": ["</mark>"],
-        },
-        from_=from_offset,
-        size=page_size,
-    )
-
-    results = []
-    for hit in response["hits"]["hits"]:
-        item = hit["_source"]
-        item["_score"] = hit["_score"]
-        item["highlight"] = hit.get("highlight", {})
-        # Normalize for clients that still expect description / rating / genre
-        if "overview" in item and not item.get("description"):
-            item["description"] = item["overview"]
-        if item.get("vote_average") is not None and item.get("rating") is None:
-            item["rating"] = item["vote_average"]
-        if item.get("genres") and not item.get("genre"):
-            item["genre"] = str(item["genres"]).split(",")[0].strip()
-
-        results.append(item)
-
-    total_val = response["hits"]["total"]["value"]
+    results, total_val = _execute_search(root, from_offset, page_size)
     total_pages = (total_val + page_size - 1) // page_size if total_val else 0
 
     return {
@@ -291,4 +352,60 @@ def search_movies(
         "page_size": page_size,
         "total_pages": total_pages,
         "results": results,
+    }
+
+
+def _hit_preview(doc: dict) -> dict:
+    return {
+        "id": doc.get("id"),
+        "title": doc.get("title") or "",
+        "year": doc.get("year"),
+        "score": doc.get("_score"),
+    }
+
+
+def compare_query_modes(
+    query_text: str,
+    genre: str | None = None,
+    year_from: int | None = None,
+    year_to: int | None = None,
+    *,
+    top_n: int = 8,
+    fuzzy: bool = True,
+    exclude_adult: bool = False,
+) -> dict:
+    """
+    Run two searches with the same filters: fuzzy multi_match vs strict match_phrase on title.
+    Returns ES-style bool queries and top hits for side-by-side UI.
+    """
+    top_n = max(1, min(top_n, MAX_PAGE_SIZE))
+
+    must_fuzzy = _multi_match_must_clause(query_text, use_fuzzy=fuzzy)
+    q_fuzzy = _bool_query(must_fuzzy, genre, year_from, year_to, exclude_adult)
+
+    must_phrase = _match_phrase_must_clause(query_text)
+    q_phrase = _bool_query(must_phrase, genre, year_from, year_to, exclude_adult)
+
+    hits_fuzzy, total_fuzzy = _execute_search(q_fuzzy, 0, top_n, with_highlight=False)
+    hits_phrase, total_phrase = _execute_search(q_phrase, 0, top_n, with_highlight=False)
+
+    fuzzy_on = "fuzziness: AUTO (typo-tolerant)" if fuzzy else "fuzziness: 0 (exact tokens only)"
+
+    return {
+        "q": query_text,
+        "filters_note": "Same genre/year/adult filters applied to both sides when set.",
+        "multi_match_side": {
+            "label": "multi_match (best_fields)",
+            "description": f"Several analyzed text fields; {fuzzy_on}.",
+            "elasticsearch_query": q_fuzzy,
+            "total": total_fuzzy,
+            "top_hits": [_hit_preview(h) for h in hits_fuzzy],
+        },
+        "match_phrase_side": {
+            "label": "match_phrase (title)",
+            "description": "Exact phrase in the title field only — no fuzziness; typos usually miss.",
+            "elasticsearch_query": q_phrase,
+            "total": total_phrase,
+            "top_hits": [_hit_preview(h) for h in hits_phrase],
+        },
     }

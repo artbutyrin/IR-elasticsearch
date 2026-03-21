@@ -5,6 +5,7 @@ from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
 
 from ..schemas.movies import SearchResponse
 from ..services.movies_service import (
+    compare_query_modes,
     import_tmdb_csv_from_upload,
     search_movies,
     seed_movies_index,
@@ -54,6 +55,14 @@ def search(
     year_to: int | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=24, ge=1, le=50),
+    fuzzy: bool = Query(
+        default=True,
+        description="If false, multi_match uses fuzziness 0 (no typo tolerance).",
+    ),
+    exclude_adult: bool = Query(
+        default=False,
+        description="Exclude documents where adult=true (requires adult field from TMDB CSV).",
+    ),
 ) -> dict:
     # Avoid stale paginated responses from proxies or aggressive browser caches.
     response.headers["Cache-Control"] = "no-store"
@@ -64,4 +73,33 @@ def search(
         year_to=year_to,
         page=page,
         page_size=page_size,
+        fuzzy=fuzzy,
+        exclude_adult=exclude_adult,
+    )
+
+
+@router.get("/search/compare")
+def search_compare(
+    response: Response,
+    q: str = Query(default="", description="Search text (try a typo, e.g. interstllar)."),
+    genre: str | None = Query(default=None),
+    year_from: int | None = Query(default=None),
+    year_to: int | None = Query(default=None),
+    top_n: int = Query(default=8, ge=1, le=24),
+    fuzzy: bool = Query(
+        default=True,
+        description="Fuzziness for the multi_match side only (match_phrase is always strict).",
+    ),
+    exclude_adult: bool = Query(default=False),
+) -> dict:
+    """Side-by-side: fuzzy multi_match vs match_phrase on title (same filters)."""
+    response.headers["Cache-Control"] = "no-store"
+    return compare_query_modes(
+        query_text=q,
+        genre=genre,
+        year_from=year_from,
+        year_to=year_to,
+        top_n=top_n,
+        fuzzy=fuzzy,
+        exclude_adult=exclude_adult,
     )
