@@ -21,7 +21,6 @@ def movies_index_mappings() -> dict:
             "runtime": {"type": "integer"},
             "status": {"type": "keyword"},
             "adult": {"type": "boolean"},
-            # Legacy demo seed (small JSON) — keep compatible fields
             "description": {"type": "text"},
             "genre": {"type": "keyword"},
             "rating": {"type": "float"},
