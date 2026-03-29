@@ -1,6 +1,3 @@
-/**
- * Page numbers with ellipses, e.g. [1, '...', 4, 5, 6, '...', 20]
- */
 function buildPageList(current, totalPages) {
   if (totalPages <= 1) return [];
   const delta = 2;
@@ -19,10 +16,6 @@ function buildPageList(current, totalPages) {
   return out;
 }
 
-/**
- * Shared pagination: first / prev / page numbers / next / last.
- * Use className to style differently in header vs footer.
- */
 export default function PaginationControls({ page, totalPages, onPageChange, className = "" }) {
   if (totalPages <= 1) return null;
 

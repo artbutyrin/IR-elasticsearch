@@ -25,7 +25,12 @@ export default function ElasticHowItWorksPage() {
 
   return (
     <>
-      <Topbar query={topQuery} onQueryChange={setTopQuery} onSearch={() => setSampleQuery(topQuery || sampleQuery)} />
+      <Topbar
+        query={topQuery}
+        onQueryChange={setTopQuery}
+        onSearch={() => setSampleQuery(topQuery || sampleQuery)}
+        onClear={() => setTopQuery("")}
+      />
       <div className="how-page">
         <h1>How Elasticsearch works in this project</h1>
         <p className="how-intro">

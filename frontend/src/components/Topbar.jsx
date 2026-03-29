@@ -1,12 +1,14 @@
 import { Link, useLocation } from "react-router-dom";
 
-export default function Topbar({ query, onQueryChange, onSearch }) {
+export default function Topbar({ query, onQueryChange, onSearch, onClear }) {
   const location = useLocation();
+  const canClear = Boolean(onClear && query?.trim());
 
   return (
     <header id="topbar">
       <div className="logo">
-        CineSearch <span className="logo-badge">ES</span>
+        <span className="logo-badge">IR-</span>
+        elasticsearch
       </div>
 
       <nav className="top-nav">
@@ -22,13 +24,30 @@ export default function Topbar({ query, onQueryChange, onSearch }) {
       </nav>
 
       <div className="topbar-search">
-        <input
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onSearch()}
-          placeholder="Search movies..."
-        />
-        <button className="topbar-search-btn" onClick={onSearch}>
+        <label className="topbar-search-field">
+          <span className="visually-hidden">Search movies</span>
+          <input
+            type="search"
+            enterKeyHint="search"
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && onSearch()}
+            placeholder="Search movies..."
+            aria-label="Search movies"
+          />
+        </label>
+        {onClear && (
+          <button
+            type="button"
+            className="topbar-clear-btn"
+            onClick={onClear}
+            disabled={!canClear}
+            title="Clear search box"
+          >
+            Clear
+          </button>
+        )}
+        <button type="button" className="topbar-search-btn" onClick={onSearch}>
           Search
         </button>
       </div>

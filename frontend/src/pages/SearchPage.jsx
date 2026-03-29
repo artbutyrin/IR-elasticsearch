@@ -133,6 +133,19 @@ export default function SearchPage() {
     if (hasSearch) fetchResults(1, undefined, { fuzzy: checked });
   };
 
+  const clearTopSearch = () => {
+    searchAbortRef.current?.abort();
+    searchSeqRef.current += 1;
+    setQuery("");
+    setResults([]);
+    setTotal(0);
+    setPage(1);
+    setTotalPages(0);
+    setHasSearch(false);
+    setErrorMessage("");
+    setLoading(false);
+  };
+
   useEffect(() => {
     let alive = true;
     const ping = async () => {
@@ -170,7 +183,12 @@ export default function SearchPage() {
         importing={importing}
         loading={loading}
       />
-      <Topbar query={query} onQueryChange={setQuery} onSearch={() => runSearch(undefined)} />
+      <Topbar
+        query={query}
+        onQueryChange={setQuery}
+        onSearch={() => runSearch(undefined)}
+        onClear={clearTopSearch}
+      />
 
       <div id="app">
         <Sidebar

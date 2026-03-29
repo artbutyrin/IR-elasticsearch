@@ -1,4 +1,3 @@
-// TMDB-style genre names (as in the CSV "genres" column)
 export const GENRES = [
   "Action",
   "Adventure",
@@ -21,7 +20,6 @@ export const GENRES = [
   "Western",
 ];
 
-// Safe demo queries (avoid very short / ambiguous terms that match adult titles)
 export const QUICK_QUERIES = [
   "interstllar",
   "Christopher Nolan",
