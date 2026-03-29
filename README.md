@@ -1,4 +1,4 @@
-# CineSearch · Elasticsearch demo
+# Cinema Search · IR-elasticsearch · Elasticsearch demo
 
 A small **full-stack** project for an **Information Retrieval** course: a movie search UI backed by **Elasticsearch 8**, **FastAPI**, and **React**.  
 
