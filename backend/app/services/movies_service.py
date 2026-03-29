@@ -69,9 +69,7 @@ def _recreate_index() -> None:
 
 
 def ensure_movies_index_search_settings() -> None:
-    """
-    Apply max_result_window on existing indices (e.g. Docker volume) so pagination works past ES default 10k.
-    """
+
     if not es_client.indices.exists(index=MOVIES_INDEX):
         return
     try:
