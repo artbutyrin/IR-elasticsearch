@@ -126,16 +126,15 @@ GET /search?genre=Science+Fiction&year_from=2000&page=2
 
 ```
 IR-elasticsearch/
-├── docker-compose.yml
 ├── backend/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── app/
 │       ├── main.py
-│       ├── core          # config, ES client
-│       ├── routers/       # health, movies
-│       ├── schemas/       # Pydantic models
-│       └── services/      # indexing, CSV import, search
+│       ├── core
+│       ├── routers/
+│       ├── schemas/
+│       └── services/
 ├── frontend/
 │   ├── Dockerfile
 │   ├── package.json
@@ -145,12 +144,14 @@ IR-elasticsearch/
 │       ├── components/
 │       ├── pages/
 │       └── constants.js
+├── .gitignore
+├── docker-compose.yml
 └── README.md
 ```
 
 ### Limits & notes
 
-- Elasticsearch’s default **`index.max_result_window`** is **10 000**: you can paginate at most through the first 10k hits with `from` + `size`. Totals above that are still reported, but deep pages are not available without `search_after` / scroll (out of scope here).
+- This demo sets **`index.max_result_window`** to **1 000 000** on the `movies` index (at create time and on API startup) and uses **`track_total_hits: true`** so counts are not stuck at 10 000. Pagination uses `from` + `size` up to that window. Beyond ~1M hits you would need `search_after` / scroll (out of scope here).
 - **Kibana** (see “How ES works” in the UI): one slide + live steps — Discover on `movies`, one document, then `GET movies/_mapping` for **text** vs **keyword**.
 - **File upload** requires `python-multipart` (already listed in `requirements.txt`).
 
@@ -255,7 +256,7 @@ GET /search/compare?q=interstllar&top_n=8
 
 ### Обмеження
 
-- У Elasticsearch стандартне вікно **`max_result_window` = 10 000**: класична пагінація дозволяє переглянути лише перші **10 000** документів; загальна кількість збігів може бути більшою.
+- У демо для індексу **`movies`** виставлено **`max_result_window` = 1 000 000** (при створенні та при старті API) і **`track_total_hits: true`**, щоб показувати повний лічильник і листати результати глибше за стандартні 10 000. Для дуже великих колекцій (порядку мільйонів і більше) зазвичай потрібні інші механізми (`search_after` тощо).
 
 ### Структура репозиторію
 
