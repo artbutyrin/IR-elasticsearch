@@ -22,7 +22,7 @@ def seed_movies() -> dict:
 
 @router.post("/import-tmdb-csv")
 async def import_tmdb_csv(file: UploadFile = File(...)) -> dict:
-    """Upload TMDB CSV (streaming write to temp file; index in chunks)."""
+
     filename = (file.filename or "").lower()
     if not filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Expected a .csv file")
@@ -64,7 +64,7 @@ def search(
         description="Exclude documents where adult=true (requires adult field from TMDB CSV).",
     ),
 ) -> dict:
-    # Avoid stale paginated responses from proxies or aggressive browser caches.
+
     response.headers["Cache-Control"] = "no-store"
     return search_movies(
         query_text=q,
@@ -92,7 +92,7 @@ def search_compare(
     ),
     exclude_adult: bool = Query(default=False),
 ) -> dict:
-    """Side-by-side: fuzzy multi_match vs match_phrase on title (same filters)."""
+
     response.headers["Cache-Control"] = "no-store"
     return compare_query_modes(
         query_text=q,

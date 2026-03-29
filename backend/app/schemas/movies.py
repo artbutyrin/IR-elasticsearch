@@ -2,7 +2,6 @@ from pydantic import BaseModel, ConfigDict
 
 
 class MovieResult(BaseModel):
-    """Flexible shape: TMDB import uses overview/vote_average/genres_list; seed uses description/rating/genre."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -11,7 +10,6 @@ class MovieResult(BaseModel):
     genre: str | None = None
     rating: float | None = None
     description: str | None = None
-    # _score, highlight, overview, vote_average, poster_path, etc. are kept via extra="allow"
 
 
 class SearchResponse(BaseModel):
