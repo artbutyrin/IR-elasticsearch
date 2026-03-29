@@ -1,6 +1,3 @@
-"""Elasticsearch index mapping for TMDB-style movie documents."""
-
-
 def movies_index_mappings() -> dict:
     return {
         "properties": {

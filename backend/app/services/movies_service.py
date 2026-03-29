@@ -1,9 +1,10 @@
 import csv
 import json
+import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from elasticsearch.helpers import bulk
 
@@ -12,11 +13,13 @@ from ..core.es_client import es_client
 from .movies_mapping import movies_index_mappings
 
 
+logger = logging.getLogger(__name__)
+
 seed_path = Path(__file__).resolve().parent.parent / "movies_seed.json"
 
 BULK_CHUNK = 800
-# Elasticsearch default max result window (from + size must stay within this)
-MAX_RESULT_WINDOW = 10000
+
+MAX_RESULT_WINDOW = 1_000_000
 DEFAULT_PAGE_SIZE = 24
 MAX_PAGE_SIZE = 50
 
@@ -31,7 +34,7 @@ def _safe_int(value: str | None, default: int | None = None) -> int | None:
 
 
 def _parse_tmdb_bool(value: object) -> bool | None:
-    """Parse TMDB CSV boolean (True/False, 1/0, etc.)."""
+
     if value is None:
         return None
     s = str(value).strip().lower()
@@ -51,14 +54,34 @@ def _safe_float(value: str | None, default: float | None = None) -> float | None
         return default
 
 
+def _index_settings() -> dict[str, Any]:
+    return {"index": {"max_result_window": MAX_RESULT_WINDOW}}
+
+
 def _recreate_index() -> None:
     if es_client.indices.exists(index=MOVIES_INDEX):
         es_client.indices.delete(index=MOVIES_INDEX)
-    es_client.indices.create(index=MOVIES_INDEX, mappings=movies_index_mappings())
+    es_client.indices.create(
+        index=MOVIES_INDEX,
+        mappings=movies_index_mappings(),
+        settings=_index_settings(),
+    )
+
+
+def ensure_movies_index_search_settings() -> None:
+    """
+    Apply max_result_window on existing indices (e.g. Docker volume) so pagination works past ES default 10k.
+    """
+    if not es_client.indices.exists(index=MOVIES_INDEX):
+        return
+    try:
+        es_client.indices.put_settings(index=MOVIES_INDEX, settings=_index_settings())
+    except Exception as exc:
+        logger.warning("Could not update %s max_result_window: %s", MOVIES_INDEX, exc)
 
 
 def tmdb_row_to_doc(row: dict) -> dict | None:
-    """Map one TMDB CSV row to an Elasticsearch document."""
+
     title = (row.get("title") or "").strip()
     if not title:
         return None
@@ -99,10 +122,7 @@ def tmdb_row_to_doc(row: dict) -> dict | None:
 
 
 def import_tmdb_csv_stream(file_obj: BinaryIO) -> dict:
-    """
-    Stream-read a TMDB CSV and bulk-index documents (does not load full file into RAM).
-    Expects columns: id, title, vote_average, release_date, overview, genres, keywords, adult (optional), etc.
-    """
+
     _recreate_index()
 
     text_stream = _utf8_text_stream(file_obj)
@@ -151,18 +171,17 @@ def import_tmdb_csv_stream(file_obj: BinaryIO) -> dict:
 def _utf8_text_stream(file_obj: BinaryIO, encoding: str = "utf-8-sig"):
     import io
 
-    # utf-8-sig strips BOM so DictReader gets clean column names
     return io.TextIOWrapper(file_obj, encoding=encoding, newline="")
 
 
 def import_tmdb_csv_from_path(path: str) -> dict:
-    """Read CSV from disk (streaming, low memory)."""
+
     with open(path, "rb") as handle:
         return import_tmdb_csv_stream(handle)
 
 
 def import_tmdb_csv_from_upload(temp_path: str) -> dict:
-    """Read CSV from a temp file path (file already saved on disk)."""
+
     return import_tmdb_csv_from_path(temp_path)
 
 
@@ -250,7 +269,7 @@ def _bool_query(
     exclude_adult: bool,
 ) -> dict:
     filters = _genre_year_filters(genre, year_from, year_to)
-    # Keep adult moderation in filter context (independent of scoring / fuzzy multi_match).
+
     if exclude_adult:
         filters.append({"bool": {"must_not": [{"term": {"adult": True}}]}})
     return {"bool": {"must": must, "filter": filters}}
@@ -302,6 +321,13 @@ HIGHLIGHT_CONFIG = {
 }
 
 
+def _hits_total_value(response: dict) -> int:
+    total = response["hits"]["total"]
+    if isinstance(total, dict):
+        return int(total.get("value", 0))
+    return int(total)
+
+
 def _execute_search(
     root_query: dict,
     from_offset: int,
@@ -314,12 +340,13 @@ def _execute_search(
         "query": root_query,
         "from_": from_offset,
         "size": page_size,
+        "track_total_hits": True,
     }
     if with_highlight:
         kw["highlight"] = HIGHLIGHT_CONFIG
     response = es_client.search(**kw)
     results = [_normalize_hit(h) for h in response["hits"]["hits"]]
-    total_val = response["hits"]["total"]["value"]
+    total_val = _hits_total_value(response)
     return results, total_val
 
 
@@ -374,10 +401,7 @@ def compare_query_modes(
     fuzzy: bool = True,
     exclude_adult: bool = False,
 ) -> dict:
-    """
-    Run two searches with the same filters: fuzzy multi_match vs strict match_phrase on title.
-    Returns ES-style bool queries and top hits for side-by-side UI.
-    """
+
     top_n = max(1, min(top_n, MAX_PAGE_SIZE))
 
     must_fuzzy = _multi_match_must_clause(query_text, use_fuzzy=fuzzy)
